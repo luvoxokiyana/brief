@@ -1,18 +1,31 @@
-type UpcomingEvent = {
-  id: string;
-  title: string;
-  when: string;
-  kind: "Consultation" | "Deposition" | "Appearance";
+import { useEffect, useState } from "react";
+import { listUpcomingEvents, type BriefEvent } from "../../lib/queries/events";
+import { formatShortDate, formatTime } from "../../lib/dates";
+
+const KIND_LABEL: Record<BriefEvent["kind"], string> = {
+  consultation: "Consultation",
+  deposition: "Deposition",
+  appearance: "Appearance",
 };
 
-const DUMMY_EVENTS: UpcomingEvent[] = [
-  { id: "u1", title: "Consultation — Smith", when: "Tue, 10:00", kind: "Consultation" },
-  { id: "u2", title: "Deposition — High Court", when: "Thu, 14:00", kind: "Deposition" },
-  { id: "u3", title: "Appearance — Magistrate's", when: "Fri, 09:30", kind: "Appearance" },
-  { id: "u4", title: "Consultation — Ndlovu", when: "Mon, 11:00", kind: "Consultation" },
-];
-
 export default function UpcomingEvents() {
+  const [events, setEvents] = useState<BriefEvent[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listUpcomingEvents(4)
+      .then((rows) => {
+        if (!cancelled) setEvents(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load upcoming events.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section
       className="border border-rule rounded-sm bg-paper"
@@ -24,17 +37,37 @@ export default function UpcomingEvents() {
         </h2>
       </header>
 
-      <ul className="divide-y divide-rule">
-        {DUMMY_EVENTS.map((e) => (
-          <li key={e.id} className="px-5 py-3">
-            <p className="text-xs uppercase tracking-wider text-ink-muted">
-              {e.kind}
-            </p>
-            <p className="mt-1 text-sm text-ink">{e.title}</p>
-            <p className="mt-1 text-xs text-ink-muted">{e.when}</p>
-          </li>
-        ))}
-      </ul>
+      {error && (
+        <p className="px-5 py-4 text-sm text-ink-muted">{error}</p>
+      )}
+
+      {!error && events === null && (
+        <p className="px-5 py-4 text-sm text-ink-muted">Loading…</p>
+      )}
+
+      {!error && events !== null && events.length === 0 && (
+        <p className="px-5 py-4 text-sm text-ink-muted">
+          Nothing scheduled yet.
+        </p>
+      )}
+
+      {!error && events !== null && events.length > 0 && (
+        <ul className="divide-y divide-rule">
+          {events.map((e) => (
+            <li key={e.id} className="px-5 py-3">
+              <p className="text-xs uppercase tracking-wider text-ink-muted">
+                {KIND_LABEL[e.kind]}
+              </p>
+              <p className="mt-1 text-sm text-ink">
+                {e.client_name ?? "No client"}
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">
+                {formatShortDate(e.start_at)} · {formatTime(e.start_at)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
